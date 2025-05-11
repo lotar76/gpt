@@ -11,7 +11,9 @@ class OpenAiChatService implements AIChatInterface
     {
         $proxy = $this->getWorkingProxy();
 //        $proxyUrl = $proxy ? "{$proxy->protocol}://{$proxy->ip}:{$proxy->port}" : null;
-        $proxyUrl = 'https://api.proxyapi.ru/openai/v1/chat/completions';
+//        $proxyUrl = 'https://api.proxyapi.ru/openai/v1/chat/completions';
+
+
 
         $headers = [
             'Authorization' => 'Bearer ' . config('services.openai.key'),
@@ -29,13 +31,29 @@ class OpenAiChatService implements AIChatInterface
             'max_tokens' => 1000,
         ];
 
+
+		$options = [
+			'verify' => false,
+			'timeout' => 30,
+		];
+
+		if ($proxy) {
+			$proxyUrl = "{$proxy->protocol}://{$proxy->ip}:{$proxy->port}";
+
+			if ($proxy->username && $proxy->password) {
+				$auth = "{$proxy->username}:{$proxy->password}@";
+				$proxyUrl = "{$proxy->protocol}://{$auth}{$proxy->ip}:{$proxy->port}";
+				$headers['Proxy-Authorization'] = 'Basic ' . base64_encode("{$proxy->username}:{$proxy->password}");
+
+			}
+
+			$options['proxy'] = $proxyUrl;
+			dump($proxyUrl); // Для дебага
+		}
+
         try {
             $response = Http::withHeaders($headers)
-                ->withOptions([
-                    'verify' => false,
-                    'proxy' => $proxyUrl,
-                    'timeout' => 30,
-                ])
+				->withOptions($options)
                 ->post(config('services.openai.url'), $body);
 
             if (! $response->successful()) {
@@ -49,7 +67,7 @@ class OpenAiChatService implements AIChatInterface
                 $proxy->save();
                 Log::warning("Прокси {$proxyUrl} отключён: " . $e->getMessage());
             }
-
+dump($proxyUrl);
             throw new \RuntimeException('Ошибка при отправке запроса через прокси: ' . $e->getMessage(), 0, $e);
         }
     }

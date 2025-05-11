@@ -14,8 +14,8 @@ class TestChatSend extends Command
 
     public function handle()
     {
-//        $imagePath = storage_path('app/public/img-gpt/1.png');
-        $imagePath = storage_path('app/public/img-gpt/2.png');
+        $imagePath = storage_path('app/public/img-gpt/2.JPG');
+//        $imagePath = storage_path('app/public/img-gpt/46.JPG');
 
         if (!file_exists($imagePath)) {
             $this->error('Файл не найден: ' . $imagePath);
@@ -24,7 +24,8 @@ class TestChatSend extends Command
 
         $imageBase64 = base64_encode(file_get_contents($imagePath));
 
-        $prompt = 'ообязательно предели тип фигуры на картинке - Прямоугольник, треугольник, Песочные часы, Яблоко, Груша. ответь просто название и все';
+        $prompt = "Проанализируй пропорции тела человека на изображении, опираясь только на силуэт и геометрию. Выбери один тип фигуры из следующих: Прямоугольник, Треугольник, Песочные часы, Яблоко, Груша. Ответь одним словом, без пояснений.";
+
 
         try {
             $response = $this->chat->sendPrompt($prompt, $imageBase64);
