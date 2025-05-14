@@ -1,32 +1,45 @@
 <?php
 
 namespace App\Console\Commands;
+
 use App\Services\AIChart\AIChatInterface;
+use App\Services\AIChart\PromptResolver;
 use Illuminate\Console\Command;
 
 class TestChatSend extends Command
 {
-    protected $signature = 'chat:test';
-    public function __construct(private readonly AIChatInterface $chat)
-    {
+    protected $signature = 'chat:test {prompt?}';
+
+    public function __construct(
+        private readonly AIChatInterface $chat,
+        private readonly PromptResolver $promptResolver,
+    ) {
         parent::__construct();
     }
 
     public function handle()
     {
-        $imagePath = storage_path('app/public/img-gpt/2.JPG');
-//        $imagePath = storage_path('app/public/img-gpt/46.JPG');
+        // Получаем ключ или текст промпта из аргумента
+        $input = $this->argument('prompt');
 
-        if (!file_exists($imagePath)) {
-            $this->error('Файл не найден: ' . $imagePath);
+        if (!$input){
+            $this->error('Промпт не задан...');
             return;
         }
 
-        $imageBase64 = base64_encode(file_get_contents($imagePath));
+        // Резолвим промпт через PromptResolver
+        $prompt = $this->promptResolver->resolve($input);
 
-        $prompt = "Проанализируй пропорции тела человека на изображении, опираясь только на силуэт и геометрию. Выбери один тип фигуры из следующих: Прямоугольник, Треугольник, Песочные часы, Яблоко, Груша. Ответь одним словом, без пояснений.";
+        // === Изображение ===
+        $imagePath = null;
+//        $imagePath = storage_path('app/public/img-gpt/2.png');
+//        $imagePath = storage_path('app/public/img-gpt/46.JPG');
 
+        $imageBase64 = $imagePath && file_exists($imagePath)
+            ? base64_encode(file_get_contents($imagePath))
+            : null;
 
+        // === Запрос к AI ===
         try {
             $response = $this->chat->sendPrompt($prompt, $imageBase64);
             $this->info($response);

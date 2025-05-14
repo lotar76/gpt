@@ -2,22 +2,38 @@
 
 namespace App\Console\Commands;
 
-use App\Services\ProxyManagerService;
 use Illuminate\Console\Command;
+use App\Services\ProxyManagerService;
+use Illuminate\Support\Facades\Log;
 
 
 class SyncVpnProxies extends Command
 {
     protected $signature = 'vpn:sync';
-    protected $description = 'Загрузка и обновление списка VPN/прокси-серверов';
+    protected $description = 'Синхронизирует список прокси с Webshare.io и проверяет их рабочесть';
 
-    public function handle(\App\Services\ProxyManagerService $service)
+    public function handle(ProxyManagerService $service): int
     {
-        $count = $service->fetchAndStore();
-        $this->info("Синхронизировано $count прокси.");
+        Log::info('[vpn:sync] Запуск команды', ['time' => now()]);
 
-        $service->validateAll();
-        $this->info("Проверка завершена.");
+        try {
+            $count = $service->syncFromWebshare();
+            $this->info("Синхронизировано {$count} прокси.");
+
+            $this->info("Проверяем рабочесть...");
+            $service->validateAll();
+            $this->info("Проверка завершена.");
+        } catch (\Throwable $e) {
+            $this->error('Ошибка: ' . $e->getMessage());
+            return 1;
+        }
+
+        Log::info('[vpn:sync] Проверка прокси завершена', [
+            'time' => now(),
+            'total' => \App\Models\VpnProxy::count(),
+        ]);
+
+
+        return 0;
     }
 }
-

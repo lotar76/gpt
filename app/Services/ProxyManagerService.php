@@ -8,52 +8,50 @@ use Illuminate\Support\Facades\Log;
 
 class ProxyManagerService
 {
-    public function fetchAndStore(): int
+    public function syncFromWebshare(): int
     {
-        $url = config('services.vpn_proxy.source_url');
+        $apiKey = config('services.webshare.token');
 
-        $response = Http::withOptions([
-            'verify' => false,
-            'timeout' => 10,
-        ])->withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-            'Referer' => 'https://www.google.com',
-            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language' => 'en-US,en;q=0.5',
-            'Upgrade-Insecure-Requests' => '1',
-        ])->get($url);
+        // бновим прокси на Webshare
+//        $this->reloadProxies();
+//        sleep(2);
 
+        // 📥 Загружаем новый список
+        $response = Http::withHeaders([
+            'Authorization' => 'Token ' . $apiKey,
+        ])->get('https://proxy.webshare.io/api/v2/proxy/list/', [
+            'mode' => 'direct',
+        ]);
 
-
-        dump($response->status(), $response->body());
-
-
-        if (! $response->ok()) {
-            throw new \RuntimeException('Ошибка загрузки прокси');
+        if (!$response->ok()) {
+            throw new \RuntimeException('Ошибка получения списка прокси с Webshare');
         }
 
-        $lines = explode("\n", trim($response->body()));
-        if (empty($lines)) {
-            throw new \RuntimeException('Пустой список прокси');
+        $data = $response->json('results');
+
+        // 🧠 Сравнение с текущей базой
+        if (!$this->hasProxyListChanged($data)) {
+            Log::info('[vpn:sync] Список прокси не изменился — база не обновляется');
+            return 0;
         }
 
+        // Чистим базу и сохраняем новые
         VpnProxy::truncate();
-
         $saved = 0;
 
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line) || !str_contains($line, ':')) continue;
-
-            [$ip, $port] = explode(':', $line);
+        foreach ($data as $item) {
+            if (empty($item['proxy_address']) || empty($item['port'])) continue;
 
             VpnProxy::create([
-                'ip' => $ip,
-                'port' => $port,
+                'ip' => $item['proxy_address'],
+                'port' => $item['port'],
                 'protocol' => 'http',
-                'country' => null,
-                'last_checked_at' => now(),
+                'username' => $item['username'] ?? null,
+                'password' => $item['password'] ?? null,
+                'country' => $item['country_code'] ?? null,
                 'is_working' => false,
+                'openai_compatible' => false,
+                'last_checked_at' => now(),
             ]);
 
             $saved++;
@@ -73,29 +71,60 @@ class ProxyManagerService
 
     public function isWorking(VpnProxy $proxy): bool
     {
-        $ip = $proxy->ip;
-        $port = $proxy->port;
-        $protocol = $proxy->protocol;
-
-        // 🔌 Быстрая проверка доступности TCP-порта (3 секунды таймаут)
-
-
-        // 🌍 Попробуем HTTP-запрос
         try {
-            $response = Http::withOptions([
-                'proxy' => "{$protocol}://{$ip}:{$port}",
+            $url = 'http://httpbin.org/ip';
+
+            $options = [
+                'proxy' => "{$proxy->protocol}://{$proxy->ip}:{$proxy->port}",
                 'timeout' => 5,
                 'verify' => false,
-            ])->get('http://httpbin.org/ip');
+            ];
 
-            if ($response->ok()) {
-                $json = $response->json();
-                return isset($json['origin']); // получили IP → прокси работает
+            if ($proxy->username && $proxy->password) {
+                $auth = base64_encode("{$proxy->username}:{$proxy->password}");
+                $headers = ['Proxy-Authorization' => "Basic {$auth}"];
+            } else {
+                $headers = [];
             }
+
+            $response = Http::withHeaders($headers)
+                ->withOptions($options)
+                ->get($url);
+
+            return $response->ok() && isset($response->json()['origin']);
         } catch (\Throwable $e) {
             return false;
         }
-
-        return false;
     }
+
+    public function reloadProxies(): void
+    {
+        $apiKey = config('services.webshare.token');
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Token ' . $apiKey,
+        ])->post('https://proxy.webshare.io/api/v2/proxy/list/refresh/');
+
+        dump($response->status(), $response->body());
+
+
+        if (!$response->ok()) {
+            throw new \RuntimeException('Ошибка обновления списка прокси на Webshare');
+        }
+
+        Log::info('[webshare] Прокси обновлены', ['time' => now()]);
+    }
+
+    private function hasProxyListChanged(array $newProxies): bool
+    {
+        $existing = VpnProxy::pluck('ip')->toArray();
+        $incoming = array_column($newProxies, 'proxy_address');
+
+        sort($existing);
+        sort($incoming);
+
+        return $existing !== $incoming;
+    }
+
+
 }

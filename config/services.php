@@ -43,5 +43,7 @@ return [
     'vpn_proxy' => [
         'source_url' => env('VPN_PROXY_SOURCE_URL'),
     ],
-
+    'webshare' => [
+        'token' => env('WEBSHARE_API_TOKEN'),
+    ],
 ];

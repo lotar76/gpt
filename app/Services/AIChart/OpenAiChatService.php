@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\AIChart;
 
 use App\Models\VpnProxy;
@@ -7,12 +8,12 @@ use Illuminate\Support\Facades\Log;
 
 class OpenAiChatService implements AIChatInterface
 {
+    public function __construct(private readonly PromptResolver $resolver) {}
+
     public function sendPrompt(string $prompt, ?string $imageBase64 = null): string
     {
         $proxy = $this->getWorkingProxy();
-//        $proxyUrl = $proxy ? "{$proxy->protocol}://{$proxy->ip}:{$proxy->port}" : null;
-//        $proxyUrl = 'https://api.proxyapi.ru/openai/v1/chat/completions';
-
+        $resolvedPrompt = $this->resolver->resolve($prompt);
 
 
         $headers = [
@@ -25,38 +26,38 @@ class OpenAiChatService implements AIChatInterface
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => $this->buildMessage($prompt, $imageBase64),
+                    'content' => $this->buildMessage($resolvedPrompt, $imageBase64),
                 ],
             ],
             'max_tokens' => 1000,
         ];
 
+//        dump($body);
+        $options = [
+            'verify' => false,
+            'timeout' => 30,
+        ];
 
-		$options = [
-			'verify' => false,
-			'timeout' => 30,
-		];
+        if ($proxy) {
+            $proxyUrl = "{$proxy->protocol}://{$proxy->ip}:{$proxy->port}";
 
-		if ($proxy) {
-			$proxyUrl = "{$proxy->protocol}://{$proxy->ip}:{$proxy->port}";
+            if ($proxy->username && $proxy->password) {
+                $auth = "{$proxy->username}:{$proxy->password}@";
+                $proxyUrl = "{$proxy->protocol}://{$auth}{$proxy->ip}:{$proxy->port}";
+                $headers['Proxy-Authorization'] = 'Basic ' . base64_encode("{$proxy->username}:{$proxy->password}");
 
-			if ($proxy->username && $proxy->password) {
-				$auth = "{$proxy->username}:{$proxy->password}@";
-				$proxyUrl = "{$proxy->protocol}://{$auth}{$proxy->ip}:{$proxy->port}";
-				$headers['Proxy-Authorization'] = 'Basic ' . base64_encode("{$proxy->username}:{$proxy->password}");
+            }
 
-			}
-
-			$options['proxy'] = $proxyUrl;
-			dump($proxyUrl); // Для дебага
-		}
+            $options['proxy'] = $proxyUrl;
+//            dump($proxyUrl); // Для дебага
+        }
 
         try {
             $response = Http::withHeaders($headers)
-				->withOptions($options)
+                ->withOptions($options)
                 ->post(config('services.openai.url'), $body);
 
-            if (! $response->successful()) {
+            if (!$response->successful()) {
                 throw new \RuntimeException('OpenAI API error: ' . $response->body());
             }
 
@@ -67,7 +68,7 @@ class OpenAiChatService implements AIChatInterface
                 $proxy->save();
                 Log::warning("Прокси {$proxyUrl} отключён: " . $e->getMessage());
             }
-dump($proxyUrl);
+//            dump($proxyUrl);
             throw new \RuntimeException('Ошибка при отправке запроса через прокси: ' . $e->getMessage(), 0, $e);
         }
     }
