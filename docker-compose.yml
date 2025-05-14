@@ -34,7 +34,7 @@ services:
                 condition: service_started
 
     mysql:
-        image: 'mysql:8.0'
+        image: 'mysql:8.0.36'
         ports:
             - '${FORWARD_DB_PORT:-3306}:3306'
         environment:
