@@ -15,11 +15,11 @@ services:
     volumes:
       - .:/var/www/html
     labels:
-      - 'traefik.enable=true'
-      - 'traefik.http.routers.gptapi.rule=Host("gpt.e-api.ru")'
-      - 'traefik.http.routers.gptapi.entrypoints=web'
-      - 'traefik.http.services.gptapi.loadbalancer.server.port=80'
-
+      - "traefik.enable=true"
+      - "traefik.http.routers.gptapi.rule=Host(`gpt.e-api.ru`)"
+      - "traefik.http.routers.gptapi.entrypoints=web"
+      - "traefik.http.routers.gptapi.service=gptapi-svc"
+      - "traefik.http.services.gptapi-svc.loadbalancer.server.port=80"
     networks:
       - sail
       - traefik
