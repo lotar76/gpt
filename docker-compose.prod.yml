@@ -91,3 +91,11 @@ networks:
     driver: bridge
   traefik:
     external: true
+
+volumes:
+  sail-mysql:
+    driver: local
+  sail-redis:
+    driver: local
+  sail-meilisearch:
+    driver: local
