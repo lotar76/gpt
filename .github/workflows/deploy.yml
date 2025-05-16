@@ -1,0 +1,54 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Deploy to Production
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
+          set -e
+
+          echo "👉 Переключаемся в директорию проекта"
+          cd /home/projects/gpt-api
+
+          echo "👉 Получаем изменения из репозитория"
+          git pull origin main
+
+          echo "👉 Проверяем изменения в файлах"
+          CHANGED_FILES=$(git diff HEAD@{1} HEAD --name-only)
+
+          echo "Изменённые файлы:"
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -q -E "composer.lock|composer.json"; then
+            echo "📦 Есть изменения в зависимостях — запускаем composer install"
+            docker compose exec -T laravel composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+          else
+            echo "📦 Нет изменений в зависимостях"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q "database/migrations"; then
+            echo "🗄️ Есть изменения в миграциях — запускаем php artisan migrate"
+            docker compose exec -T laravel php artisan migrate --force
+          else
+            echo "🗄️ Нет изменений в миграциях"
+          fi
+
+          echo "✅ Деплой успешно завершён"
+        EOF
+
