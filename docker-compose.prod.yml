@@ -21,7 +21,7 @@ services:
       - "traefik.http.routers.gptapi.service=gptapi-svc"
       - "traefik.http.services.gptapi-svc.loadbalancer.server.port=80"
     networks:
-      - sail
+      - sail-gpt
       - traefik
     depends_on:
       mysql:
@@ -43,9 +43,9 @@ services:
       MARIADB_USER: laravel
       MARIADB_PASSWORD: password
     volumes:
-      - sail-mysql:/var/lib/mysql
+      - gpt-mysql:/var/lib/mysql
     networks:
-      - sail
+      - sail-gpt
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-ppassword"]
       retries: 10
@@ -54,9 +54,9 @@ services:
   redis:
     image: redis:alpine
     volumes:
-      - sail-redis:/data
+      - gpt-redis:/data
     networks:
-      - sail
+      - sail-gpt
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       retries: 3
@@ -67,9 +67,9 @@ services:
     environment:
       MEILI_NO_ANALYTICS: '${MEILISEARCH_NO_ANALYTICS:-false}'
     volumes:
-      - sail-meilisearch:/meili_data
+      - gpt-meilisearch:/meili_data
     networks:
-      - sail
+      - sail-gpt
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--spider", "http://127.0.0.1:7700/health" ]
       retries: 3
@@ -78,25 +78,25 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     networks:
-      - sail
+      - sail-gpt
 
   selenium:
     image: selenium/standalone-chromium
     volumes:
       - /dev/shm:/dev/shm
     networks:
-      - sail
+      - sail-gpt
 
 networks:
-  sail:
+  sail-gpt:
     driver: bridge
   traefik:
     external: true
 
 volumes:
-  sail-mysql:
+  gpt-mysql:
     driver: local
-  sail-redis:
+  gpt-redis:
     driver: local
-  sail-meilisearch:
+  gpt-meilisearch:
     driver: local
